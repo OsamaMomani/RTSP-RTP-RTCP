@@ -1,0 +1,25 @@
+*
+
+!.gitignore
+!code**
+!code/lib**
+
+!CImg
+!CImg/*
+!README.md
+
+code/logs
+code/server
+code/client
+
+# vscode
+!.vscode
+
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
