@@ -44,6 +44,11 @@ struct rtp_hdr_t {
 */
 
 // --------------------------- RTCP Packet ---------------------------------
+/*
+rtcp_common:
+    define common fields for all RTCP packets types(SR,RR,SDES,BYE,APP)
+*/
+
 struct rtcp_common {
     unsigned int version:2;   /* protocol version */
     unsigned int p:1;         /* padding flag */
@@ -60,17 +65,18 @@ struct rtcp_common {
 
 
 /*
-* Reception report block
+rtcp_rb:
+    define reception report block
+    SR, RR have one or more reception report blocks
 */
-struct rtcp_rr {
-    unsigned int ssrc;             /* data source being reported */
-    unsigned int fraction:8;  /* fraction lost since last SR/RR */
-
-    int lost:24;              /* cumul. no. pkts lost (signed!) */
-    unsigned int last_seq;         /* extended last seq. no. received */
-    unsigned int jitter;           /* interarrival jitter */
-    unsigned int lsr;              /* last SR packet from this source */
-    unsigned int dlsr;             /* delay since last SR packet */
+struct rtcp_rb {
+    unsigned int ssrc;              /* data source being reported */
+    unsigned int fraction:8;        /* fraction lost since last SR/RR */
+    int lost:24;                    /* cumul. no. pkts lost (signed!) */
+    unsigned int last_seq;          /* extended last seq. no. received */
+    unsigned int jitter;            /* interarrival jitter */
+    unsigned int lsr;               /* last SR packet from this source */
+    unsigned int dlsr;              /* delay since last SR packet */
 };
 
 
@@ -83,27 +89,118 @@ struct RTCPPacket {
         /* sender report (SR) */
         struct {
             unsigned int ssrc;     /* sender generating this report */
-            unsigned int ntp_sec;  /* NTP timestamp */
-            unsigned int ntp_frac;
-            unsigned int rtp_ts;   /* RTP timestamp */
-            unsigned int psent;    /* packets sent */
-            unsigned int osent;    /* octets sent */
-            struct rtcp_rr rr[1];  /* variable-length list */
+            unsigned int ntp_sec;  // NTP timestamp   <--| These are the only
+            unsigned int ntp_frac; //                 <--| additional 20-bytes
+            unsigned int rtp_ts;   // RTP timestamp   <--| fields besides 
+            unsigned int psent;    // packets sent    <--| the RR 
+            unsigned int osent;    // octets sent     <--| header.
+            struct rtcp_rb rb;  /* variable-length list */
         } sr;
 
         /* reception report (RR) */
         struct {
             unsigned int ssrc;     /* receiver generating this report */
-            struct rtcp_rr rr[1];  /* variable-length list */
+            struct rtcp_rb rb;  /* variable-length list */
         } rr;
         /* BYE */
         struct {
-            unsigned int src[1];   /* list of sources */
+            unsigned int ssrc;   /* list of sources */
 
-            /* can't express trailing text for reason */
+            // OPTIONAL reason for leaving and length of reason in bytes 
+            unsigned int length:8;
+            unsigned char reason[256];
         } bye;
     } r;
-} ;
+} ; //
+
+
+/*
+
+------------------------ RTCP Packet formats based on RFC3550 ------------------------:
+
+6.4.1 SR: Sender Report RTCP Packet
+
+        0                   1                   2                   3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+header |V=2|P|    RC   |   PT=SR=200   |             length            |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         SSRC of sender                        |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+sender |              NTP timestamp, most significant word             |
+info   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |             NTP timestamp, least significant word             |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         RTP timestamp                         |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                     sender's packet count                     |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                      sender's octet count                     |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+report |                 SSRC_1 (SSRC of first source)                 |
+block  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  1    | fraction lost |       cumulative number of packets lost       |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |           extended highest sequence number received           |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                      interarrival jitter                      |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         last SR (LSR)                         |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                   delay since last SR (DLSR)                  |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+report |                 SSRC_2 (SSRC of second source)                |
+block  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  2    :                               ...                             :
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+       |                  profile-specific extensions                  |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 
 
+6.4.2 RR: Receiver Report RTCP Packet
+
+        0                   1                   2                   3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+header |V=2|P|    RC   |   PT=RR=201   |             length            |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                     SSRC of packet sender                     |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+report |                 SSRC_1 (SSRC of first source)                 |
+block  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  1    | fraction lost |       cumulative number of packets lost       |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |           extended highest sequence number received           |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                      interarrival jitter                      |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         last SR (LSR)                         |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                   delay since last SR (DLSR)                  |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+report |                 SSRC_2 (SSRC of second source)                |
+block  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  2    :                               ...                             :
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+       |                  profile-specific extensions                  |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+6.6 BYE: Goodbye RTCP Packet
+
+       0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |V=2|P|    SC   |   PT=BYE=203  |             length            |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      |                           SSRC/CSRC                           |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      :                              ...                              :
+      +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+(opt) |     length    |               reason for leaving            ...
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+
+*/

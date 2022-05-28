@@ -22,9 +22,9 @@ using namespace std;
 
 // Global shared varibles here:
 int g_current_img = 1;
-bool g_play=0, g_teardown =false;
-short g_client_port=12345; // client rtp listening port
-//ofstream cout = ofstream("logs/err.log", ios_base::app); // bind all cout output to log file
+bool g_play=1, g_teardown =false;
+short g_client_port=12345; // client rtp  listening port
+short g_rtcp_port= 12347;  // client rtcp listening port
 
 // All user  libraries here:
 #include "lib/CImg.h"

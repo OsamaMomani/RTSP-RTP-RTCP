@@ -19,8 +19,13 @@ void *rtp_server(void *i)
         {
             g_play = false;
             g_current_img = 1;
+
         }
-    
+        if(!g_play) {
+            cout<<"==>rtp waiting a play command " <<endl<< std::flush;
+            while(!g_play) sleep(1);
+        }
+
         static RTPPacket rtp_packet;
         char name[200];
         sprintf(name, "server_vid/image%03d.jpg", g_current_img);
@@ -32,14 +37,15 @@ void *rtp_server(void *i)
         }
         img.read(rtp_packet.payload, sizeof(rtp_packet.payload));
         img.close();
-        rtp_packet.sequence++;
+        rtp_packet.sequence = g_current_img;
+        //TODO rtp_packet.sequence++;
         rtp_packet.timestamp = time(0);
         rtp_packet.ssrc = 0x12345678;   // TODO
         if(g_teardown) return 0;        // if rtsp teardown, kill this thread
-        while(!g_play) {cout<<"rtp waiting play";sleep(1);}     // if rtsp pause, wait for play
+        //while(!g_play) {cout<<"rtp waiting play";sleep(1);}     // if rtsp pause, wait for play
         sendto(socketID, &rtp_packet, sizeof(rtp_packet), 0, (struct sockaddr *)&address, addrlength) !=-1 || cout << "Error sending rtp packet\n";
         cout<<"rtp sent:"<<g_current_img<< endl;
-        usleep(1000);
+        usleep(100000); // wait for 100ms just to make a longer session for testing
         g_current_img++;
     }
     return 0 ;
@@ -70,7 +76,7 @@ void *rtp_client(void *i)
         RTPPacket rtp_packet;
         cout<<"www"<< g_play <<endl;
         int valread;
-        g_play=1 ;
+        //g_play=1 ;
         valread =recvfrom(socketID, (char *)&rtp_packet, sizeof(rtp_packet), MSG_WAITALL, 0, 0);
         // set g_play and start recieving rtp packets
         cout << "\n------------\nvalread: " << valread << endl
@@ -82,6 +88,22 @@ void *rtp_client(void *i)
         ofstream img(name, ios::binary);
         img.write(rtp_packet.payload, sizeof(rtp_packet.payload));
         img.close();
+        // report to rtcp server
+        static int  i=1;
+        if(i++%50) continue;  // send on the 50th packet ==> 1/50 of the bandwidth
+        RTCPPacket rtcp_packet;
+        rtcp_packet.r.sr.rtp_ts = rtp_packet.timestamp;
+        rtcp_packet.r.sr.rb.ssrc = rtp_packet.sequence;
+        rtcp_packet.common.pt = 200;
+
+        // send rtcp packet
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = inet_addr("127.0.0.1");
+        address.sin_port = htons(g_rtcp_port-1); // rtp client port (initialized in rtsp_server)
+
+        rtcp_send( socket(AF_INET, SOCK_DGRAM, 0), &address, rtcp_packet);
+
+        
         
     }
 
