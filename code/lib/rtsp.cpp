@@ -47,14 +47,22 @@ void *rtsp_server( void* ){
         }
     }   
 }
-void *rtsp_client( void* pointer){
-    RTSPPacket rtsp_packet = *(RTSPPacket*)pointer;
+void rtsp_client( method_t method){
+
+    RTSPPacket rtsp_packet; // build rtsp packet
+    strncpy(rtsp_packet.uri, "rtsp://127.0.0.1:5544/test.mp4", sizeof(rtsp_packet.uri));
+    strncpy(rtsp_packet.session, "12345", sizeof(rtsp_packet.session));
+    //rtsp_packet.cseq = 1;
+    rtsp_packet.state = 200; 
+    rtsp_packet.method = method;
+
+    rtsp_packet.client_port = g_client_port; 
     cout << "rtsp_client" << endl;
     int socketID = socket(AF_INET, SOCK_DGRAM, 0);
     if (socketID < 0)
     {
         cout << "Error while creating rtsp client socket\n";
-        return 0;
+        return;
     }
     struct sockaddr_in address;
     address.sin_family = AF_INET;
@@ -66,9 +74,9 @@ void *rtsp_client( void* pointer){
      if (valread < 0)
     {
         cout << "Error while sending rtsp packet\n";
-        return 0;
+        return;
     }
-    return 0;
+    return;
  
 }
 
